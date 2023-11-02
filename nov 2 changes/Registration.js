@@ -1,0 +1,264 @@
+import React, { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import * as yup from "yup";
+import {
+  useGetUsersQuery,
+  useAddUserMutation,
+  useDeleteUserMutation,
+} from "../../redux/api";
+import { useNavigate, Link } from "react-router-dom";
+import Swal from "sweetalert2";
+
+const schema = yup.object({
+  firstName: yup.string().required("First Name is required"),
+  lastName: yup.string().required("Last Name is required"),
+  email: yup.string().required("Email is required").email("Email is invalid"),
+  password: yup
+    .string()
+    .min(6, "Password must be at least 6 characters")
+    .required("Password is required"),
+  profileImage: yup
+    .mixed()
+    .test("fileSize", "File size is too large", (value) => {
+      return value.length && value[0].size <= 1024000;
+    }),
+
+  acceptTerms: yup.bool().oneOf([true], "Accept Ts & Cs is required"),
+});
+
+function Registration() {
+  const [user, setUser] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const navigate = useNavigate();
+
+  const { data: users = [], isFetching, isError } = useGetUsersQuery();
+  const [addUser] = useAddUserMutation();
+  const [deleteOne] = useDeleteUserMutation();
+
+  const usersFromDB = users.data;
+  console.log(usersFromDB);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({
+    resolver: yupResolver(schema),
+  });
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    setSelectedFile(file);
+  };
+
+  const handleAddUser = async (userData) => {
+    const imageFile = userData.profileImage[0];
+
+    try {
+      const formData = new FormData();
+  
+      formData.append("firstName", userData.firstName);
+      formData.append("lastName", userData.lastName);
+      formData.append("email", userData.email);
+      formData.append("password", userData.password);
+      formData.append("acceptTerms", userData.acceptTerms);
+      formData.append("profileImage", imageFile);
+      // console.log(formData);
+      let result = await addUser(formData);
+      console.log("User added:", result);
+    } catch (error) {
+      console.error("Error adding user:", error);
+    }
+    document.getElementById("registration-form").reset();
+  };
+
+  const deleteUser = (userId) => {
+    Swal.fire({
+      title: "Are you sure?",
+      text: "You won't be able to revert this!",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, delete it!",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          await deleteOne(userId);
+          Swal.fire("Deleted!", "Your file has been deleted.", "success");
+        } catch (error) {
+          console.log(error);
+          Swal.fire("Error!", "Failed to delete.", "error");
+        }
+      }
+    });
+  };
+
+  return (
+    <div className="container mt-2">
+      <div className="text-center bg-secondary mb-2">
+        <Link className="btn btn-primary mx-2 my-3" to={"/"}>
+          Home
+        </Link>
+        <Link className="btn btn-primary mx-2 my-3" to={"/addproducts"}>
+          products
+        </Link>
+        <Link className="btn btn-primary mx-2 my-3" to={"/login"}>
+          Login
+        </Link>
+      </div>
+      <form
+        id="registration-form"
+        className="border border-2 p-4 rounded"
+        onSubmit={handleSubmit(handleAddUser)}
+      >
+        <h3 className="my-3">Register Form</h3>
+        <div className="mb-3">
+          <label className="form-label">First Name</label>
+          <input
+            name="firstName"
+            type="text"
+            {...register("firstName")}
+            className={`form-control ${errors.firstName ? "is-invalid" : ""}`}
+          />
+          <div className="invalid-feedback">{errors.firstName?.message}</div>
+        </div>
+        <div className="mb-3">
+          <label className="form-label">Last Name</label>
+          <input
+            name="lastName"
+            type="text"
+            {...register("lastName")}
+            className={`form-control ${errors.lastName ? "is-invalid" : ""}`}
+          />
+          <div className="invalid-feedback">{errors.lastName?.message}</div>
+        </div>
+        <div className="mb-3">
+          <label className="form-label">Email</label>
+          <input
+            name="email"
+            type="text"
+            {...register("email")}
+            className={`form-control ${errors.email ? "is-invalid" : ""}`}
+          />
+          <div className="invalid-feedback">{errors.email?.message}</div>
+        </div>
+        <div className="mb-3">
+          <label className="form-label">Password</label>
+          <input
+            name="password"
+            type="password"
+            {...register("password")}
+            className={`form-control ${errors.password ? "is-invalid" : ""}`}
+          />
+          <div className="invalid-feedback">{errors.password?.message}</div>
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label">Profile Image</label>
+          <input
+            type="file"
+            onChange={handleImageUpload}
+            {...register("profileImage")}
+            className={`form-control ${
+              errors.profileImage ? "is-invalid" : ""
+            }`}
+          />
+          <div className="invalid-feedback">{errors.profileImage?.message}</div>
+          {selectedFile && (
+            <p>
+              Selected file: {selectedFile.name} ({selectedFile.type})
+            </p>
+          )}
+        </div>
+
+        <div className="mb-3">
+          <div className="form-check">
+            <input
+              name="acceptTerms"
+              type="checkbox"
+              {...register("acceptTerms")}
+              className={`form-check-input ${
+                errors.acceptTerms ? "is-invalid" : ""
+              }`}
+            />
+            <label className="form-check-label">
+              I accept the terms and conditions
+            </label>
+            <div className="invalid-feedback">
+              {errors.acceptTerms?.message}
+            </div>
+          </div>
+        </div>
+        <button type="submit" className="btn btn-primary">
+          Register User
+        </button>
+      </form>
+
+      <div>
+        <h2 className="mt-4 mb-3">Registered Users</h2>
+        {isFetching ? (
+          <p>Loading...</p>
+        ) : isError ? (
+          <p>Error fetching data</p>
+        ) : usersFromDB.length > 0 ? (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>S.no</th>
+                <th>profile pic</th>
+                <th>First Name</th>
+                <th>Last Name</th>
+                <th>Email</th>
+                <th>Actions</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usersFromDB.map((user, i) => (
+                <tr key={user._id}>
+                  <td>{i + 1}</td>
+                  <td>
+                    {user.profileImage && (
+                      
+                      <img
+                        src={`http://localhost:8000/${user.profileImage}`}
+                        alt="Profile"
+                        style={{ width: "50px", height: "50px" }}
+                      />
+                    )}
+                  </td>
+                  <td>{user.firstName}</td>
+                  <td>{user.lastName}</td>
+                  <td>{user.email}</td>
+
+                  <td>
+                    <button
+                      className="btn btn-danger"
+                      onClick={() => deleteUser(user._id)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-success"
+                      onClick={() => navigate(`/edituser/${user._id}`)}
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>No data available</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default Registration;
