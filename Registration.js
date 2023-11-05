@@ -1,118 +1,93 @@
-import React from "react";
-import { useForm } from "react-hook-form";
-import { yupResolver } from "@hookform/resolvers/yup";
-import * as yup from "yup";
-import axios from "axios";
+//changes //Logout Func
 
-const schema = yup.object({
-  firstName: yup.string().required("First Name is required"),
-  lastName: yup.string().required("Last Name is required"),
-  email: yup.string().required("Email is required").email("Email is invalid"),
-  password: yup
-    .string()
-    .min(6, "Password must be at least 6 characters")
-    .required("Password is required"),
-  confirmPassword: yup
-    .string()
-    .oneOf([yup.ref("password")], "Passwords must match")
-    .required("Confirm Password is required"),
-  acceptTerms: yup.bool().oneOf([true], "Accept Ts & Cs is required"),
-});
 
-function Registration() {
-  const { register, handleSubmit, formState: { errors } } = useForm({
-    resolver: yupResolver(schema),
-  });
+import React, { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useGetSingleUserQuery } from "../../redux/api";
 
-  const onSubmit = async (data) => {
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const { data, isFetching } = useGetSingleUserQuery();
+  const user = data?.data;
+
+  const getExpiryTimeFromToken = (token) => {
+    if (!token) {
+      return null;
+    }
+
+    const tokenParts = token.split('.');
+    if (tokenParts.length < 3) {
+      return null;
+    }
+
     try {
-      console.log("working", data);
-      const response = await axios.post("http://localhost:8000/users", data);
+      const decodedToken = atob(tokenParts[1]);
+      const parsedToken = JSON.parse(decodedToken);
 
-      console.log("Registration successful", response.data);
-
-      // Optionally, you can show a success message using toast or other methods.
-
-      // Clear the form
-      document.getElementById("registration-form").reset();
+      if (parsedToken.exp) {
+        return parsedToken.exp * 1000;
+      } else {
+        return null;
+      }
     } catch (error) {
-      console.error("Registration failed", error);
-
-      // Optionally, you can show an error message using toast or other methods.
+      console.error("Error decoding or parsing the token:", error);
+      return null;
     }
   };
 
+  useEffect(() => {
+    const token = localStorage.getItem('LoggedUserToken');
+    const expiryTime = getExpiryTimeFromToken(token);
+
+    if (expiryTime && expiryTime < Date.now()) {
+      localStorage.removeItem('LoggedUserToken');
+      navigate('/login');
+      window.location.reload();
+    }
+  }, [navigate]);
+
+  if (isFetching) {
+    return <div>Loading...</div>;
+  }
+
+  const expirationTime = new Date(getExpiryTimeFromToken(localStorage.getItem('LoggedUserToken')));
+  const currentDateTime = new Date();
+
+  if (expirationTime < currentDateTime) {
+    localStorage.removeItem('LoggedUserToken');
+    navigate('/login');
+    window.location.reload();
+  }
+
+
   return (
-    <div className="container">
-      <form onSubmit={handleSubmit(onSubmit)} id="registration-form">
-        <div className="form-row">
-          <div className="form-group col-5">
-            <label className="text-white">First Name</label>
-            <input
-              name="firstName"
-              type="text"
-              {...register("firstName")}
-              className={`form-control ${errors.firstName ? "is-invalid" : ""}`}
-            />
-            <div className="invalid-feedback">{errors.firstName?.message}</div>
-          </div>
-          <div className="form-group col-5">
-            <label className="text-white">Last Name</label>
-            <input
-              name="lastName"
-              type="text"
-              {...register("lastName")}
-              className={`form-control ${errors.lastName ? "is-invalid" : ""}`}
-            />
-            <div className="invalid-feedback">{errors.lastName?.message}</div>
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group col">
-            <label className="text-white">Email</label>
-            <input
-              name="email"
-              type="text"
-              {...register("email")}
-              className={`form-control ${errors.email ? "is-invalid" : ""}`}
-            />
-            <div className="invalid-feedback">{errors.email?.message}</div>
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group col">
-            <label className="text-white">Password</label>
-            <input
-              name="password"
-              type="password"
-              {...register("password")}
-              className={`form-control ${errors.password ? "is-invalid" : ""}`}
-            />
-            <div className="invalid-feedback">{errors.password?.message}</div>
-          </div>
-          <div className="form-group col">
-            <label className="text-white">Confirm Password</label>
-            <input
-              name="confirmPassword"
-              type="password"
-              {...register("confirmPassword")}
-              className={`form-control ${
-                errors.confirmPassword ? "is-invalid" : ""
-              }`}
-            />
-            <div className="invalid-feedback">
-              {errors.confirmPassword?.message}
+    <div className="col-10 m-auto">
+      <h3 className="text-center">User Details</h3>
+      <div className="card m-3">
+        {user ? (
+          <>
+            <h4 className="card-title text-center mt-4">
+              {user.firstName}'s Profile
+            </h4>
+            <div className="card-body p-4">
+              <h5 className="card-title">UserID: {user._id}</h5>
+              <p>FirstName: {user.firstName}</p>
+              <p>LastName: {user.lastName}</p>
+              <p>Email: {user.email}</p>
             </div>
-          </div>
-        </div>
-        <div className="form-group">
-          <button type="submit" className="btn btn-primary mr-1">
-            Register
-          </button>
-        </div>
-      </form>
+            <div>
+              <button className="btn btn-success m-3">Edit Profile</button>
+              <Link to={'/addproducts'} className="btn btn-success m-3">
+                Products
+              </Link>
+            </div>
+          </>
+        ) : (
+          <p>Loading...</p>
+        )}
+      </div>
     </div>
   );
-}
+};
 
-export default Registration;
+export default Dashboard;
